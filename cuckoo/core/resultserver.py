@@ -61,10 +61,9 @@ class ResultServer(SocketServer.ThreadingTCPServer, object):
                             "Cannot bind ResultServer on port %d, "
                             "bailing." % self.port
                         )
-                    else:
-                        log.warning("Cannot bind ResultServer on port %s, "
-                                    "trying another port.", self.port)
-                        self.port += 1
+                    log.warning("Cannot bind ResultServer on port %s, "
+                                "trying another port.", self.port)
+                    self.port += 1
                 elif e.errno == errno.EADDRNOTAVAIL:
                     raise CuckooCriticalError(
                         "Unable to bind ResultServer on %s:%s %s. This "
@@ -76,9 +75,9 @@ class ResultServer(SocketServer.ThreadingTCPServer, object):
                     )
                 else:
                     raise CuckooCriticalError(
-                        "Unable to bind ResultServer on %s:%s: %s" %
-                        (self.ip, self.port, e)
+                        f"Unable to bind ResultServer on {self.ip}:{self.port}: {e}"
                     )
+
             else:
                 log.debug(
                     "ResultServer running on %s:%s.", self.ip, self.port
@@ -134,7 +133,7 @@ class ResultServer(SocketServer.ThreadingTCPServer, object):
         if not task or not machine:
             return
 
-        return cwd("storage", "analyses", "%s" % task.id)
+        return cwd("storage", "analyses", f"{task.id}")
 
 class ResultHandler(SocketServer.BaseRequestHandler):
     """Result handler.
@@ -185,11 +184,11 @@ class ResultHandler(SocketServer.BaseRequestHandler):
         while len(buf) < length:
             if not self.wait_sock_or_end():
                 raise Disconnect()
-            tmp = self.request.recv(length-len(buf))
-            if not tmp:
-                raise Disconnect()
-            buf += tmp
+            if tmp := self.request.recv(length - len(buf)):
+                buf += tmp
 
+            else:
+                raise Disconnect()
         if isinstance(self.protocol, BsonParser):
             if self.rawlogfd:
                 self.rawlogfd.write(buf)
@@ -207,10 +206,10 @@ class ResultHandler(SocketServer.BaseRequestHandler):
     def read_any(self):
         if not self.wait_sock_or_end():
             raise Disconnect()
-        tmp = self.request.recv(BUFSIZE)
-        if not tmp:
+        if tmp := self.request.recv(BUFSIZE):
+            return tmp
+        else:
             raise Disconnect()
-        return tmp
 
     def read_newline(self, strip=False):
         buf = ""
@@ -305,7 +304,7 @@ class ResultHandler(SocketServer.BaseRequestHandler):
                 pid, ppid, procname.encode("utf8")
             )
 
-        filepath = os.path.join(self.storagepath, "logs", "%s.bson" % pid)
+        filepath = os.path.join(self.storagepath, "logs", f"{pid}.bson")
         self.rawlogfd = open(filepath, "wb")
         self.rawlogfd.write(self.startbuf)
 
@@ -346,9 +345,7 @@ class FileUpload(ProtocolHandler):
         dir_part, filename = os.path.split(dump_path)
 
         if "./" in dump_path or not dir_part or dump_path.startswith("/"):
-            raise CuckooOperationalError(
-                "FileUpload failure, banned path: %s" % dump_path
-            )
+            raise CuckooOperationalError(f"FileUpload failure, banned path: {dump_path}")
 
         for restricted in self.RESTRICTED_DIRECTORIES:
             if restricted in dir_part:
@@ -407,7 +404,6 @@ class FileUpload(ProtocolHandler):
 
         log.debug("Uploaded file length: %s", self.fd.tell())
         return
-        yield
 
     def close(self):
         if self.fd:
@@ -436,7 +432,6 @@ class LogHandler(ProtocolHandler):
             self.fd.flush()
 
         return
-        yield
 
     def close(self):
         if self.fd:

@@ -61,9 +61,8 @@ def vpn_status():
     """Gets current VPN status."""
     ret = {}
     for line in run(s.service, "openvpn", "status")[0].split("\n"):
-        x = re.search("'(?P<vpn>\\w+)'\\ is\\ (?P<running>not)?", line)
-        if x:
-            ret[x.group("vpn")] = x.group("running") != "not"
+        if x := re.search("'(?P<vpn>\\w+)'\\ is\\ (?P<running>not)?", line):
+            ret[x["vpn"]] = x["running"] != "not"
 
     return ret
 
@@ -133,15 +132,40 @@ def flush_rttable(rt_table):
 def dns_forward(action, vm_ip, dns_ip, dns_port="53"):
     """Route DNS requests from the VM to a custom DNS on a separate network."""
     run(
-        s.iptables, "-t", "nat", action, "PREROUTING", "-p", "tcp",
-        "--dport", "53", "--source", vm_ip, "-j", "DNAT",
-        "--to-destination", "%s:%s" % (dns_ip, dns_port)
+        s.iptables,
+        "-t",
+        "nat",
+        action,
+        "PREROUTING",
+        "-p",
+        "tcp",
+        "--dport",
+        "53",
+        "--source",
+        vm_ip,
+        "-j",
+        "DNAT",
+        "--to-destination",
+        f"{dns_ip}:{dns_port}",
     )
 
+
     run(
-        s.iptables, "-t", "nat", action, "PREROUTING", "-p", "udp",
-        "--dport", "53", "--source", vm_ip, "-j", "DNAT",
-        "--to-destination", "%s:%s" % (dns_ip, dns_port)
+        s.iptables,
+        "-t",
+        "nat",
+        action,
+        "PREROUTING",
+        "-p",
+        "udp",
+        "--dport",
+        "53",
+        "--source",
+        vm_ip,
+        "-j",
+        "DNAT",
+        "--to-destination",
+        f"{dns_ip}:{dns_port}",
     )
 
 def forward_enable(src, dst, ipaddr):
@@ -240,18 +264,44 @@ def tor_toggle(action, vm_ip, resultserver_ip, dns_port, proxy_port):
     dns_forward(action, vm_ip, resultserver_ip, dns_port)
 
     run(
-        s.iptables, "-t", "nat", action, "PREROUTING", "-p", "tcp",
-        "--source", vm_ip, "!", "--destination", resultserver_ip,
-        "-j", "DNAT", "--to-destination",
-        "%s:%s" % (resultserver_ip, proxy_port)
+        s.iptables,
+        "-t",
+        "nat",
+        action,
+        "PREROUTING",
+        "-p",
+        "tcp",
+        "--source",
+        vm_ip,
+        "!",
+        "--destination",
+        resultserver_ip,
+        "-j",
+        "DNAT",
+        "--to-destination",
+        f"{resultserver_ip}:{proxy_port}",
     )
 
+
     run(
-        s.iptables, "-t", "nat", action, "PREROUTING", "-p", "udp",
-        "--source", vm_ip, "!", "--destination", resultserver_ip,
-        "-j", "DNAT", "--to-destination",
-        "%s:%s" % (resultserver_ip, proxy_port)
+        s.iptables,
+        "-t",
+        "nat",
+        action,
+        "PREROUTING",
+        "-p",
+        "udp",
+        "--source",
+        vm_ip,
+        "!",
+        "--destination",
+        resultserver_ip,
+        "-j",
+        "DNAT",
+        "--to-destination",
+        f"{resultserver_ip}:{proxy_port}",
     )
+
     run(s.iptables, action, "OUTPUT", "-s", vm_ip, "-j", "DROP")
 
 def tor_enable(vm_ip, resultserver_ip, dns_port, proxy_port):
@@ -265,16 +315,38 @@ def tor_disable(vm_ip, resultserver_ip, dns_port, proxy_port):
 def drop_toggle(action, vm_ip, resultserver_ip, resultserver_port, agent_port):
     """Toggle iptables to allow internal Cuckoo traffic."""
     run(
-        s.iptables, action, "INPUT", "--source", vm_ip, "-p", "tcp",
-        "--destination", resultserver_ip, "--dport", "%s" % resultserver_port,
-        "-j", "ACCEPT"
+        s.iptables,
+        action,
+        "INPUT",
+        "--source",
+        vm_ip,
+        "-p",
+        "tcp",
+        "--destination",
+        resultserver_ip,
+        "--dport",
+        f"{resultserver_port}",
+        "-j",
+        "ACCEPT",
     )
 
+
     run(
-        s.iptables, action, "OUTPUT", "--source", resultserver_ip,
-        "-p", "tcp", "--destination", vm_ip, "--dport", "%s" % agent_port,
-        "-j", "ACCEPT"
+        s.iptables,
+        action,
+        "OUTPUT",
+        "--source",
+        resultserver_ip,
+        "-p",
+        "tcp",
+        "--destination",
+        vm_ip,
+        "--dport",
+        f"{agent_port}",
+        "-j",
+        "ACCEPT",
     )
+
 
     run(
         s.iptables, action, "INPUT", "--source", vm_ip, "-j", "DROP"
@@ -413,10 +485,12 @@ def cuckoo_rooter(socket_path, group, service, iptables, ip):
                 break
         else:
             log.debug(
-                "Processing command: %s %s %s", command,
+                "Processing command: %s %s %s",
+                command,
                 " ".join(args),
-                " ".join("%s=%s" % (k, v) for k, v in kwargs.items())
+                " ".join(f"{k}={v}" for k, v in kwargs.items()),
             )
+
 
             output = e = None
             try:

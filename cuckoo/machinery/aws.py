@@ -42,7 +42,7 @@ class AWS(Machinery):
         self.ec2_machines = {}
         self.dynamic_machines_sequence = 0
         self.dynamic_machines_count = 0
-        log.info("connecting to AWS:{}".format(self.options.aws.region_name))
+        log.info(f"connecting to AWS:{self.options.aws.region_name}")
         self.ec2_resource = boto3.resource(
             "ec2", region_name=self.options.aws.region_name, aws_access_key_id=self.options.aws.aws_access_key_id,
             aws_secret_access_key=self.options.aws.aws_secret_access_key)
@@ -51,7 +51,7 @@ class AWS(Machinery):
         for instance in self.ec2_resource.instances.filter(Filters=[{"Name": "instance-state-name",
                                                                      "Values": ["running", "stopped", "stopping"]}]):
             if self._is_autoscaled(instance):
-                log.info("Terminating autoscaled instance %s" % instance.id)
+                log.info(f"Terminating autoscaled instance {instance.id}")
                 instance.terminate()
 
         instance_ids = self._list()
@@ -87,8 +87,7 @@ class AWS(Machinery):
         session = self.db.Session()
         try:
             from cuckoo.core.database import Machine
-            machine = session.query(Machine).filter_by(label=label).first()
-            if machine:
+            if machine := session.query(Machine).filter_by(label=label).first():
                 session.delete(machine)
                 session.commit()
         except SQLAlchemyError as e:
@@ -217,10 +216,10 @@ class AWS(Machinery):
                 status = AWS.ERROR
             else:
                 status = AWS.ERROR
-            log.info("instance state: {}".format(status))
+            log.info(f"instance state: {status}")
             return status
         except Exception as e:
-            log.exception("can't retrieve the status: {}".format(e))
+            log.exception(f"can't retrieve the status: {e}")
             return AWS.ERROR
 
     """override Machinery method"""
@@ -232,7 +231,7 @@ class AWS(Machinery):
         @param task: task object.
         @raise CuckooMachineError: if unable to start.
         """
-        log.debug("Starting vm {}".format(label))
+        log.debug(f"Starting vm {label}")
 
         if not self._is_autoscaled(self.ec2_machines[label]):
             self.ec2_machines[label].start()
@@ -247,14 +246,12 @@ class AWS(Machinery):
         @param label: virtual machine label.
         @raise CuckooMachineError: if unable to stop.
         """
-        log.debug("Stopping vm %s" % label)
+        log.debug(f"Stopping vm {label}")
 
         status = self._status(label)
 
         if status == AWS.POWEROFF:
-            raise CuckooMachineError(
-                "Trying to stop an already stopped VM: %s" % label
-            )
+            raise CuckooMachineError(f"Trying to stop an already stopped VM: {label}")
 
         if self._is_autoscaled(self.ec2_machines[label]):
             self.ec2_machines[label].terminate()
@@ -320,7 +317,7 @@ class AWS(Machinery):
         This method detaches and deletes the current volume, then creates a new one and attaches it.
         :param label: machine label
         """
-        log.info("restoring machine: {}".format(label))
+        log.info(f"restoring machine: {label}")
         vm_info = self.db.view_machine_by_label(label)
         snap_id = vm_info.snapshot
         instance = self.ec2_machines[label]
@@ -338,7 +335,7 @@ class AWS(Machinery):
 
         log.debug("Detaching %s", old_volume.id)
         resp = instance.detach_volume(VolumeId=old_volume.id, Force=True)
-        log.debug('response: {}'.format(resp))
+        log.debug(f'response: {resp}')
         while True:
             old_volume.reload()
             if old_volume.state != 'in-use':
@@ -375,7 +372,7 @@ class AWS(Machinery):
 
         log.debug('Attaching new volume')
         resp = instance.attach_volume(VolumeId=new_volume.id, Device="/dev/sda1")
-        log.debug('response {}'.format(resp))
+        log.debug(f'response {resp}')
         while True:
             new_volume.reload()
             if new_volume.state != 'available':

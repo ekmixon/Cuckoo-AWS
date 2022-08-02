@@ -38,9 +38,7 @@ def enumerate_plugins(dirpath, module_prefix, namespace, class_,
         if fname.endswith(".py") and not fname.startswith("__init__"):
             module_name, _ = os.path.splitext(fname)
             try:
-                importlib.import_module(
-                    "%s.%s" % (module_prefix, module_name)
-                )
+                importlib.import_module(f"{module_prefix}.{module_name}")
             except ImportError as e:
                 raise CuckooOperationalError(
                     "Unable to load the Cuckoo plugin at %s: %s. Please "
@@ -71,10 +69,7 @@ def enumerate_plugins(dirpath, module_prefix, namespace, class_,
         plugins.append(subclass)
 
     if as_dict:
-        ret = {}
-        for plugin in plugins:
-            ret[plugin.__module__.split(".")[-1]] = plugin
-        return ret
+        return {plugin.__module__.split(".")[-1]: plugin for plugin in plugins}
 
     return sorted(plugins, key=lambda x: x.__name__.lower())
 
@@ -142,7 +137,7 @@ class RunAuxiliary(object):
         enabled = []
         for module in self.enabled:
             try:
-                getattr(module, "cb_%s" % name, default)(*args, **kwargs)
+                getattr(module, f"cb_{name}", default)(*args, **kwargs)
             except NotImplementedError:
                 pass
             except CuckooDisableModule:
@@ -298,13 +293,7 @@ class RunProcessing(object):
         # Uses plain machine configuration as input.
         self.populate_machine_info()
 
-        # Order modules using the user-defined sequence number.
-        # If none is specified for the modules, they are selected in
-        # alphabetical order.
-        processing_list = cuckoo.processing.plugins
-
-        # If no modules are loaded, return an empty dictionary.
-        if processing_list:
+        if processing_list := cuckoo.processing.plugins:
             processing_list.sort(key=lambda module: module.order)
 
             # Run every loaded processing module.
@@ -332,22 +321,23 @@ class RunSignatures(object):
         self.matched = []
 
         # Initialize each applicable Signature.
-        self.signatures = []
-        for signature in self.available_signatures:
-            if self.should_enable_signature(signature):
-                self.signatures.append(signature(self))
+        self.signatures = [
+            signature(self)
+            for signature in self.available_signatures
+            if self.should_enable_signature(signature)
+        ]
 
         # Signatures to call per API name.
         self.api_sigs = {}
 
     @classmethod
     def init_once(cls):
-        cls.available_signatures = []
+        cls.available_signatures = [
+            signature
+            for signature in cuckoo.signatures
+            if cls.should_load_signature(signature)
+        ]
 
-        # Gather all enabled & up-to-date Signatures.
-        for signature in cuckoo.signatures:
-            if cls.should_load_signature(signature):
-                cls.available_signatures.append(signature)
 
         # Sort Signatures by their order.
         cls.available_signatures.sort(key=lambda sig: sig.order)
@@ -358,14 +348,15 @@ class RunSignatures(object):
         if not signature.enabled or signature.name is None:
             return False
 
-        if not cls.check_signature_version(signature):
-            return False
-
-        if hasattr(signature, "enable") and callable(signature.enable):
-            if not signature.enable():
-                return False
-
-        return True
+        return (
+            bool(
+                not hasattr(signature, "enable")
+                or not callable(signature.enable)
+                or signature.enable()
+            )
+            if cls.check_signature_version(signature)
+            else False
+        )
 
     def should_enable_signature(self, signature):
         # Network and/or cross-platform signatures.
@@ -577,7 +568,7 @@ class RunReporting(object):
         """@param analysis_path: analysis folder path."""
         self.task = task
         self.results = results
-        self.analysis_path = cwd("storage", "analyses", "%s" % task["id"])
+        self.analysis_path = cwd("storage", "analyses", f'{task["id"]}')
 
     def process(self, module):
         """Run a single reporting module.
@@ -643,14 +634,7 @@ class RunReporting(object):
         """Generates all reports.
         @raise CuckooReportError: if a report module fails.
         """
-        # In every reporting module you can specify a numeric value that
-        # represents at which position that module should be executed among
-        # all the available ones. It can be used in the case where a
-        # module requires another one to be already executed beforehand.
-        reporting_list = cuckoo.reporting.plugins
-
-        # Return if no reporting modules are loaded.
-        if reporting_list:
+        if reporting_list := cuckoo.reporting.plugins:
             reporting_list.sort(key=lambda module: module.order)
 
             # Run every loaded reporting module.

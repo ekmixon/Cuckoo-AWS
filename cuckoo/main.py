@@ -152,12 +152,7 @@ def cuckoo_init(level, ctx, cfg=None):
     init_rooter()
     init_routing()
 
-    signatures = 0
-    for sig in cuckoo.signatures:
-        if not sig.enabled:
-            continue
-        signatures += 1
-
+    signatures = sum(1 for sig in cuckoo.signatures if sig.enabled)
     if not signatures:
         log.warning(
             "It appears that you haven't loaded any Cuckoo Signatures. "
@@ -248,11 +243,7 @@ def main(ctx, debug, quiet, nolog, maxcount, user, cwd):
 @click.option("--conf", type=click.Path(exists=True, file_okay=True, readable=True), help="Flat key/value configuration file")
 def init(ctx, conf):
     """Initializes Cuckoo and its configuration."""
-    if conf and os.path.exists(conf):
-        cfg = read_kv_conf(conf)
-    else:
-        cfg = None
-
+    cfg = read_kv_conf(conf) if conf and os.path.exists(conf) else None
     # If this is a new install, also apply the provided configuration.
     cuckoo_init(logging.INFO, ctx.parent, cfg)
 
